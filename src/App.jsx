@@ -1,92 +1,93 @@
 import { useState, useEffect } from 'react'
 import { leerDatos, guardarDatos } from './datos/almacenamiento'
-import {
-  calcularSaldoTotal,
-  calcularSaldoDisponible,
-  calcularFlujoMensual,
-  calcularAlertas,
-} from './datos/calculos'
-import { formatearEuros } from './utilidades/formato'
+import { calcularAlertas } from './datos/calculos'
 import { fechaDeHoy, sumarMeses } from './utilidades/fechas'
 
-// ── Datos de ejemplo (TEMPORAL) ─────────────────────────────────
-// Esto es solo para comprobar que el motor de cálculo funciona.
-// En el próximo paso vamos a reemplazar esto por un formulario real
-// donde vos vas a poder cargar tus propias cuentas y movimientos.
-const cuentasDeEjemplo = [
-  { id: 1, nombre: 'Cuenta corriente principal', tipo: 'corriente', saldo: 15000, activa: true },
-  { id: 2, nombre: 'Cuenta ahorro', tipo: 'corriente', saldo: 500, activa: true },
-]
-const movimientosDeEjemplo = [
-  { id: 1, fecha: sumarMeses(fechaDeHoy(), 1), concepto: 'Cobro cliente', categoria: 'cobros_clientes', importe: 8000, cuenta_id: 1 },
-  { id: 2, fecha: sumarMeses(fechaDeHoy(), 1), concepto: 'Pago proveedor', categoria: 'pagos_prov', importe: -3000, cuenta_id: 1 },
-]
+import BarraLateral from './componentes/BarraLateral'
+import Dashboard from './pestanas/Dashboard'
+import ResumenMensual from './pestanas/ResumenMensual'
+import Prevision from './pestanas/Prevision'
+import PoolBancario from './pestanas/PoolBancario'
+import Confirming from './pestanas/Confirming'
+import Movimientos from './pestanas/Movimientos'
+import Alertas from './pestanas/Alertas'
+import Configuracion from './pestanas/Configuracion'
 
 export default function App() {
+  // Todos los datos de la herramienta, en un solo lugar.
   const [estado, setEstado] = useState(leerDatos)
+  // Qué pestaña está activa ahora mismo.
+  const [pestanaActiva, setPestanaActiva] = useState('dashboard')
 
+  // Cada vez que "estado" cambia, lo guardamos.
   useEffect(() => {
     guardarDatos(estado)
   }, [estado])
 
   const cambiarNombreEmpresa = (nuevoNombre) => {
-    setEstado({
-      ...estado,
-      config: { ...estado.config, empresa: nuevoNombre },
-    })
+    setEstado({ ...estado, config: { ...estado.config, empresa: nuevoNombre } })
   }
 
-  // Usamos el motor de cálculo con los datos de ejemplo de arriba.
-  const saldoTotal = calcularSaldoTotal(cuentasDeEjemplo)
-  const saldoDisponible = calcularSaldoDisponible(cuentasDeEjemplo)
-  const flujoMensual = calcularFlujoMensual(movimientosDeEjemplo)
-  const alertas = calcularAlertas(cuentasDeEjemplo, [], movimientosDeEjemplo, sumarMeses(fechaDeHoy(), 1))
+  const irAConfiguracion = () => setPestanaActiva('configuracion')
+
+  // Alertas calculadas en base a los datos reales (por ahora vacíos).
+  const fechaObjetivo = sumarMeses(fechaDeHoy(), 1)
+  const alertas = calcularAlertas(estado.cuentas, estado.financiaciones, estado.movimientos, fechaObjetivo)
+
+  // Según la pestaña activa, mostramos un componente distinto.
+  const renderPestana = () => {
+    switch (pestanaActiva) {
+      case 'dashboard':
+        return <Dashboard cuentas={estado.cuentas} irAConfiguracion={irAConfiguracion} />
+      case 'resumen':
+        return <ResumenMensual movimientos={estado.movimientos} />
+      case 'prevision':
+        return <Prevision cuentas={estado.cuentas} irAConfiguracion={irAConfiguracion} />
+      case 'pool':
+        return <PoolBancario cuentas={estado.cuentas} />
+      case 'confirming':
+        return <Confirming confirming={estado.confirming} />
+      case 'movimientos':
+        return <Movimientos movimientos={estado.movimientos} />
+      case 'alertas':
+        return <Alertas alertas={alertas} />
+      case 'configuracion':
+        return (
+          <Configuracion
+            config={estado.config}
+            cambiarNombreEmpresa={cambiarNombreEmpresa}
+            cuentas={estado.cuentas}
+            categorias={estado.categorias}
+          />
+        )
+      default:
+        return null
+    }
+  }
+
+  // Título legible de la pestaña activa, para el encabezado.
+  const titulos = {
+    dashboard: 'Dashboard',
+    resumen: 'Resumen mensual de caja',
+    prevision: 'Previsión de Tesorería',
+    pool: 'Pool Bancario',
+    confirming: 'Confirming',
+    movimientos: 'Movimientos',
+    alertas: 'Alertas y Control',
+    configuracion: 'Configuración',
+  }
 
   return (
-    <div className="min-h-screen bg-[#0d0f14] p-6 space-y-4 max-w-md mx-auto">
-
-      <div className="bg-[#171b2a] border border-[#2d3553] rounded-xl p-6 space-y-3">
-        <h1 className="text-sm font-semibold text-white">🎉 Hola, EdFlow</h1>
-        <div>
-          <label className="text-xs text-[#94a3b8] block mb-1">Nombre de tu empresa</label>
-          <input
-            type="text"
-            value={estado.config.empresa}
-            onChange={(e) => cambiarNombreEmpresa(e.target.value)}
-            placeholder="Escribí algo acá..."
-            className="w-full bg-[#0f1420] border border-[#252b3a] rounded-lg px-3 py-2
-                       text-sm text-white
-                       focus:outline-none focus:border-[#4f8ef7]/50"
-          />
-        </div>
-      </div>
-
-      <div className="bg-[#171b2a] border border-[#2d3553] rounded-xl p-6">
-        <h3 className="text-sm font-semibold text-white mb-3">
-          Prueba del motor de cálculo (con datos de ejemplo)
-        </h3>
-        <div className="space-y-2 text-xs">
-          <p className="text-[#cbd5e1]">
-            Saldo total: <span className="text-white font-medium">{formatearEuros(saldoTotal)}</span>
-          </p>
-          <p className="text-[#cbd5e1]">
-            Saldo disponible: <span className="text-white font-medium">{formatearEuros(saldoDisponible)}</span>
-          </p>
-          <p className="text-[#cbd5e1]">
-            Próximo mes — ingresos: <span className="text-[#34d399] font-medium">{formatearEuros(flujoMensual[1].ingresos)}</span>
-          </p>
-          <p className="text-[#cbd5e1]">
-            Próximo mes — gastos: <span className="text-[#f87171] font-medium">{formatearEuros(flujoMensual[1].gastos)}</span>
-          </p>
-          <p className="text-[#cbd5e1]">
-            Alertas detectadas: <span className="text-[#fbbf24] font-medium">{alertas.length}</span>
-          </p>
-          {alertas.map((a, i) => (
-            <p key={i} className="text-[#64748b] pl-2">→ {a.mensaje}</p>
-          ))}
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-[#0d0f14] flex">
+      <BarraLateral
+        pestanaActiva={pestanaActiva}
+        cambiarPestana={setPestanaActiva}
+        cantidadAlertas={alertas.length}
+      />
+      <main className="flex-1 p-6">
+        <h1 className="text-xl font-semibold text-white mb-4">{titulos[pestanaActiva]}</h1>
+        {renderPestana()}
+      </main>
     </div>
   )
 }
