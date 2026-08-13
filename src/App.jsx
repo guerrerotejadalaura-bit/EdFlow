@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { leerDatos, guardarDatos } from './datos/almacenamiento'
+import { leerDatos, guardarDatos, borrarDatos } from './datos/almacenamiento'
+import { ESTADO_INICIAL } from './datos/modelo'
 import { calcularAlertas } from './datos/calculos'
-import { fechaDeHoy, sumarMeses } from './utilidades/fechas'
+import { fechaDeHoy, sumarMeses, generarId } from './utilidades/fechas'
 
 import BarraLateral from './componentes/BarraLateral'
 import Dashboard from './pestanas/Dashboard'
@@ -14,27 +15,64 @@ import Alertas from './pestanas/Alertas'
 import Configuracion from './pestanas/Configuracion'
 
 export default function App() {
-  // Todos los datos de la herramienta, en un solo lugar.
   const [estado, setEstado] = useState(leerDatos)
-  // Qué pestaña está activa ahora mismo.
   const [pestanaActiva, setPestanaActiva] = useState('dashboard')
 
-  // Cada vez que "estado" cambia, lo guardamos.
   useEffect(() => {
     guardarDatos(estado)
   }, [estado])
 
-  const cambiarNombreEmpresa = (nuevoNombre) => {
-    setEstado({ ...estado, config: { ...estado.config, empresa: nuevoNombre } })
-  }
-
   const irAConfiguracion = () => setPestanaActiva('configuracion')
 
-  // Alertas calculadas en base a los datos reales (por ahora vacíos).
+  // ── Config de empresa ──────────────────────────────────────
+  const guardarConfigEmpresa = (datosEmpresa) => {
+    setEstado({ ...estado, config: datosEmpresa })
+  }
+
+  // ── Cuentas: crear, editar, eliminar, activar/desactivar ────
+  const agregarCuenta = (datosCuenta) => {
+    const cuentaNueva = { ...datosCuenta, id: generarId(), activa: true }
+    setEstado({ ...estado, cuentas: [...estado.cuentas, cuentaNueva] })
+  }
+
+  const editarCuenta = (id, cambios) => {
+    setEstado({
+      ...estado,
+      cuentas: estado.cuentas.map((c) => (c.id === id ? { ...c, ...cambios } : c)),
+    })
+  }
+
+  const eliminarCuenta = (id) => {
+    setEstado({ ...estado, cuentas: estado.cuentas.filter((c) => c.id !== id) })
+  }
+
+  const toggleActivaCuenta = (id) => {
+    setEstado({
+      ...estado,
+      cuentas: estado.cuentas.map((c) => (c.id === id ? { ...c, activa: !c.activa } : c)),
+    })
+  }
+
+  // ── Categorías: crear y eliminar ─────────────────────────────
+  const agregarCategoria = ({ nombre, signo, color }) => {
+    const categoriaNueva = { id: 'cat_' + generarId(), label: nombre, signo, color }
+    setEstado({ ...estado, categorias: [...estado.categorias, categoriaNueva] })
+  }
+
+  const eliminarCategoria = (id) => {
+    setEstado({ ...estado, categorias: estado.categorias.filter((c) => c.id !== id) })
+  }
+
+  // ── Borrar todo ───────────────────────────────────────────────
+  const borrarTodo = () => {
+    borrarDatos()
+    setEstado(ESTADO_INICIAL)
+  }
+
+  // Alertas calculadas en base a los datos reales.
   const fechaObjetivo = sumarMeses(fechaDeHoy(), 1)
   const alertas = calcularAlertas(estado.cuentas, estado.financiaciones, estado.movimientos, fechaObjetivo)
 
-  // Según la pestaña activa, mostramos un componente distinto.
   const renderPestana = () => {
     switch (pestanaActiva) {
       case 'dashboard':
@@ -55,9 +93,16 @@ export default function App() {
         return (
           <Configuracion
             config={estado.config}
-            cambiarNombreEmpresa={cambiarNombreEmpresa}
+            guardarConfigEmpresa={guardarConfigEmpresa}
             cuentas={estado.cuentas}
+            agregarCuenta={agregarCuenta}
+            editarCuenta={editarCuenta}
+            eliminarCuenta={eliminarCuenta}
+            toggleActivaCuenta={toggleActivaCuenta}
             categorias={estado.categorias}
+            agregarCategoria={agregarCategoria}
+            eliminarCategoria={eliminarCategoria}
+            borrarTodo={borrarTodo}
           />
         )
       default:
@@ -65,7 +110,6 @@ export default function App() {
     }
   }
 
-  // Título legible de la pestaña activa, para el encabezado.
   const titulos = {
     dashboard: 'Dashboard',
     resumen: 'Resumen mensual de caja',
