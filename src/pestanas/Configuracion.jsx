@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Landmark, ArrowUp, ArrowDown, ArrowLeftRight } from 'lucide-react'
 import EstadoVacio from '../componentes/EstadoVacio'
-import ModalCuenta from '../componentes/ModalCuenta'
 import ModalCategoria from '../componentes/ModalCategoria'
+import ConfirmacionInline from '../componentes/ConfirmacionInline'
 import { formatearEuros } from '../utilidades/formato'
 
 const ESTILO_INPUT =
@@ -10,19 +10,23 @@ const ESTILO_INPUT =
   'focus:outline-none focus:border-[#4f8ef7]/50'
 const ESTILO_LABEL = 'text-xs text-[#94a3b8] block mb-1'
 
-// Un pequeño ícono según el signo de la categoría (ingreso/gasto/neutro).
 function IconoSigno({ signo }) {
   if (signo === 'ingreso') return <ArrowUp size={11} className="text-[#34d399]" />
   if (signo === 'gasto') return <ArrowDown size={11} className="text-[#f87171]" />
   return <ArrowLeftRight size={11} className="text-[#94a3b8]" />
 }
 
+// Nota: el modal de "nueva/editar cuenta" ahora se controla desde
+// App.jsx (porque el botón "+ Cuenta" de la barra lateral necesita
+// abrirlo también, y esa barra vive fuera de esta pestaña). Por eso
+// acá recibimos "abrirNuevaCuenta" y "abrirEdicionCuenta" como props
+// en vez de manejar ese modal acá adentro.
 export default function Configuracion({
   config,
   guardarConfigEmpresa,
   cuentas,
-  agregarCuenta,
-  editarCuenta,
+  abrirNuevaCuenta,
+  abrirEdicionCuenta,
   eliminarCuenta,
   toggleActivaCuenta,
   categorias,
@@ -30,54 +34,20 @@ export default function Configuracion({
   eliminarCategoria,
   borrarTodo,
 }) {
-  // ── Datos de empresa: usamos un "borrador" local, y recién lo
-  // guardamos de verdad cuando el usuario toca "Guardar datos". ──
   const [borrador, setBorrador] = useState(config)
   const cambiarBorrador = (campo, valor) => setBorrador({ ...borrador, [campo]: valor })
 
-  // ── Modales: cuál está abierto ahora mismo (o ninguno) ──
-  const [modalCuentaAbierto, setModalCuentaAbierto] = useState(false)
-  const [cuentaEnEdicion, setCuentaEnEdicion] = useState(null)
   const [modalCategoriaAbierto, setModalCategoriaAbierto] = useState(false)
 
-  const abrirNuevaCuenta = () => {
-    setCuentaEnEdicion(null)
-    setModalCuentaAbierto(true)
-  }
-  const abrirEdicionCuenta = (cuenta) => {
-    setCuentaEnEdicion(cuenta)
-    setModalCuentaAbierto(true)
-  }
-  const alGuardarCuenta = (datosCuenta) => {
-    if (cuentaEnEdicion) {
-      editarCuenta(cuentaEnEdicion.id, datosCuenta)
-    } else {
-      agregarCuenta(datosCuenta)
-    }
-    setModalCuentaAbierto(false)
-  }
-
-  const alEliminarCuenta = (cuenta) => {
-    if (confirm(`¿Eliminar la cuenta "${cuenta.nombre}"? Esta acción no se puede deshacer.`)) {
-      eliminarCuenta(cuenta.id)
-    }
-  }
+  // ── Confirmaciones "Sí/No": guardamos ACÁ cuál elemento está
+  // pidiendo confirmación ahora mismo (o null si ninguno). ──
+  const [confirmarEliminarCuentaId, setConfirmarEliminarCuentaId] = useState(null)
+  const [confirmarEliminarCategoriaId, setConfirmarEliminarCategoriaId] = useState(null)
+  const [confirmarBorrarTodo, setConfirmarBorrarTodo] = useState(false)
 
   const alGuardarCategoria = (datosCategoria) => {
     agregarCategoria(datosCategoria)
     setModalCategoriaAbierto(false)
-  }
-
-  const alEliminarCategoria = (categoria) => {
-    if (confirm(`¿Eliminar la categoría "${categoria.label}"?`)) {
-      eliminarCategoria(categoria.id)
-    }
-  }
-
-  const alBorrarTodo = () => {
-    if (confirm('¿Borrar TODOS los datos (cuentas, movimientos, categorías)? Esta acción no se puede deshacer.')) {
-      borrarTodo()
-    }
   }
 
   return (
@@ -179,12 +149,26 @@ export default function Configuracion({
                   >
                     Editar
                   </button>
-                  <button
-                    onClick={() => alEliminarCuenta(cuenta)}
-                    className="text-[#64748b] hover:text-[#f87171]"
-                  >
-                    ✕
-                  </button>
+
+                  {/* Acá está el cambio: si esta cuenta es la que está
+                      "pidiendo confirmación", mostramos Sí/No en vez
+                      de la ✕. */}
+                  {confirmarEliminarCuentaId === cuenta.id ? (
+                    <ConfirmacionInline
+                      onConfirmar={() => {
+                        eliminarCuenta(cuenta.id)
+                        setConfirmarEliminarCuentaId(null)
+                      }}
+                      onCancelar={() => setConfirmarEliminarCuentaId(null)}
+                    />
+                  ) : (
+                    <button
+                      onClick={() => setConfirmarEliminarCuentaId(cuenta.id)}
+                      className="text-[#64748b] hover:text-[#f87171]"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -214,9 +198,23 @@ export default function Configuracion({
               <span className="w-4 h-4 rounded-full bg-[#171b2a] flex items-center justify-center">
                 <IconoSigno signo={cat.signo} />
               </span>
-              <button onClick={() => alEliminarCategoria(cat)} className="text-[#64748b] hover:text-[#f87171] ml-1">
-                ✕
-              </button>
+
+              {confirmarEliminarCategoriaId === cat.id ? (
+                <ConfirmacionInline
+                  onConfirmar={() => {
+                    eliminarCategoria(cat.id)
+                    setConfirmarEliminarCategoriaId(null)
+                  }}
+                  onCancelar={() => setConfirmarEliminarCategoriaId(null)}
+                />
+              ) : (
+                <button
+                  onClick={() => setConfirmarEliminarCategoriaId(cat.id)}
+                  className="text-[#64748b] hover:text-[#f87171] ml-1"
+                >
+                  ✕
+                </button>
+              )}
             </span>
           ))}
         </div>
@@ -230,22 +228,28 @@ export default function Configuracion({
             Los datos se guardan automáticamente en este navegador. Exportá un JSON de respaldo periódicamente.
           </p>
         </div>
-        <button
-          onClick={alBorrarTodo}
-          className="text-xs text-[#f87171] border border-[#f87171]/40 hover:bg-[#f87171]/10 rounded-lg px-4 py-2 shrink-0"
-        >
-          Borrar todos los datos
-        </button>
+
+        {confirmarBorrarTodo ? (
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="text-xs text-[#94a3b8]">¿Seguro? No se puede deshacer.</span>
+            <ConfirmacionInline
+              onConfirmar={() => {
+                borrarTodo()
+                setConfirmarBorrarTodo(false)
+              }}
+              onCancelar={() => setConfirmarBorrarTodo(false)}
+            />
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmarBorrarTodo(true)}
+            className="text-xs text-[#f87171] border border-[#f87171]/40 hover:bg-[#f87171]/10 rounded-lg px-4 py-2 shrink-0"
+          >
+            Borrar todos los datos
+          </button>
+        )}
       </div>
 
-      {/* ── Modales (solo se muestran si están "abiertos") ── */}
-      {modalCuentaAbierto && (
-        <ModalCuenta
-          cuentaExistente={cuentaEnEdicion}
-          guardar={alGuardarCuenta}
-          cerrar={() => setModalCuentaAbierto(false)}
-        />
-      )}
       {modalCategoriaAbierto && (
         <ModalCategoria guardar={alGuardarCategoria} cerrar={() => setModalCategoriaAbierto(false)} />
       )}
