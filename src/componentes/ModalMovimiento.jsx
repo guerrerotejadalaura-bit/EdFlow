@@ -14,18 +14,22 @@ const ESTILO_LABEL = 'text-xs text-[#94a3b8] block mb-1'
 // "movimiento recurrente", además elegimos cada cuánto se repite y
 // cuántas veces — App.jsx se encarga de generar todos los
 // movimientos futuros de una sola vez.
-export default function ModalMovimiento({ categorias, cuentas, guardar, cerrar }) {
-  const [form, setForm] = useState({
-    fecha: fechaDeHoy(),
-    importe: '',
-    concepto: '',
-    categoria: categorias[0]?.id || '',
-    cuenta_id: '',
-    recurrente: false,
-    frecuencia: 'mensual',
-    repeticiones: 3,
-    notas: '',
-  })
+export default function ModalMovimiento({ categorias, cuentas, movimientoExistente, guardar, cerrar }) {
+  const editando = Boolean(movimientoExistente)
+
+  const [form, setForm] = useState(
+    movimientoExistente || {
+      fecha: fechaDeHoy(),
+      importe: '',
+      concepto: '',
+      categoria: categorias[0]?.id || '',
+      cuenta_id: '',
+      recurrente: false,
+      frecuencia: 'mensual',
+      repeticiones: 3,
+      notas: '',
+    }
+  )
 
   const cambiarCampo = (campo, valor) => setForm({ ...form, [campo]: valor })
 
@@ -34,11 +38,24 @@ export default function ModalMovimiento({ categorias, cuentas, guardar, cerrar }
       alert('Completá al menos la fecha, el importe, el concepto y la cuenta.')
       return
     }
-    guardar({ ...form, importe: Number(form.importe) })
+    if (editando) {
+      // Al editar no tocamos la recurrencia: solo actualizamos los
+      // datos básicos del movimiento puntual.
+      guardar({
+        fecha: form.fecha,
+        importe: Number(form.importe),
+        concepto: form.concepto,
+        categoria: form.categoria,
+        cuenta_id: form.cuenta_id,
+        notas: form.notas,
+      })
+    } else {
+      guardar({ ...form, importe: Number(form.importe) })
+    }
   }
 
   return (
-    <Modal titulo="Nuevo movimiento" cerrar={cerrar}>
+    <Modal titulo={editando ? 'Editar movimiento' : 'Nuevo movimiento'} cerrar={cerrar}>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -101,49 +118,51 @@ export default function ModalMovimiento({ categorias, cuentas, guardar, cerrar }
           </div>
         </div>
 
-        {/* ── Recurrencia ── */}
-        <div>
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.recurrente}
-              onChange={(e) => cambiarCampo('recurrente', e.target.checked)}
-              className="mt-0.5"
-            />
-            <span>
-              <span className="text-sm text-[#cbd5e1] block">¿Es un movimiento recurrente?</span>
-              <span className="text-xs text-[#64748b]">Se repetirá automáticamente según la frecuencia que elijas</span>
-            </span>
-          </label>
+        {/* ── Recurrencia (solo al crear, no al editar un movimiento puntual) ── */}
+        {!editando && (
+          <div>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.recurrente}
+                onChange={(e) => cambiarCampo('recurrente', e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="text-sm text-[#cbd5e1] block">¿Es un movimiento recurrente?</span>
+                <span className="text-xs text-[#64748b]">Se repetirá automáticamente según la frecuencia que elijas</span>
+              </span>
+            </label>
 
-          {form.recurrente && (
-            <div className="grid grid-cols-2 gap-3 mt-3 pl-6">
-              <div>
-                <label className={ESTILO_LABEL}>Frecuencia</label>
-                <select
-                  value={form.frecuencia}
-                  onChange={(e) => cambiarCampo('frecuencia', e.target.value)}
-                  className={ESTILO_INPUT}
-                >
-                  <option value="mensual">Mensual</option>
-                  <option value="trimestral">Trimestral</option>
-                  <option value="semestral">Semestral</option>
-                  <option value="anual">Anual</option>
-                </select>
+            {form.recurrente && (
+              <div className="grid grid-cols-2 gap-3 mt-3 pl-6">
+                <div>
+                  <label className={ESTILO_LABEL}>Frecuencia</label>
+                  <select
+                    value={form.frecuencia}
+                    onChange={(e) => cambiarCampo('frecuencia', e.target.value)}
+                    className={ESTILO_INPUT}
+                  >
+                    <option value="mensual">Mensual</option>
+                    <option value="trimestral">Trimestral</option>
+                    <option value="semestral">Semestral</option>
+                    <option value="anual">Anual</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={ESTILO_LABEL}>Cantidad de repeticiones</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.repeticiones}
+                    onChange={(e) => cambiarCampo('repeticiones', e.target.value)}
+                    className={ESTILO_INPUT}
+                  />
+                </div>
               </div>
-              <div>
-                <label className={ESTILO_LABEL}>Cantidad de repeticiones</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={form.repeticiones}
-                  onChange={(e) => cambiarCampo('repeticiones', e.target.value)}
-                  className={ESTILO_INPUT}
-                />
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         <div>
           <label className={ESTILO_LABEL}>Notas</label>
@@ -167,7 +186,7 @@ export default function ModalMovimiento({ categorias, cuentas, guardar, cerrar }
             onClick={alGuardar}
             className="bg-[#4f8ef7] hover:bg-[#4f8ef7]/90 text-white text-xs font-medium rounded-lg px-4 py-2"
           >
-            Guardar
+            {editando ? 'Guardar cambios' : 'Guardar'}
           </button>
         </div>
       </div>

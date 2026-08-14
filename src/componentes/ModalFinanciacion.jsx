@@ -23,21 +23,25 @@ const TIPOS = [
 // mensual" son dos formas distintas de cargar el mismo dato: la
 // primera es más precisa, la segunda más rápida si no tenés todos
 // los datos del contrato a mano.
-export default function ModalFinanciacion({ cuentas, guardar, cerrar }) {
-  const [form, setForm] = useState({
-    tipo: 'prestamo',
-    modoFecha: 'fechas', // "fechas" o "cuota"
-    nombre: '',
-    entidad: '',
-    cuenta_id: '',
-    capital_inicial: '',
-    capital_pendiente: '',
-    tipo_interes: '',
-    cuota_mensual: '',
-    fecha_inicio: '',
-    fecha_fin: '',
-    comision_apertura: '',
-  })
+export default function ModalFinanciacion({ cuentas, financiacionExistente, guardar, cerrar }) {
+  const editando = Boolean(financiacionExistente)
+
+  const [form, setForm] = useState(
+    financiacionExistente || {
+      tipo: 'prestamo',
+      modoFecha: 'fechas', // "fechas" o "cuota"
+      nombre: '',
+      entidad: '',
+      cuenta_id: '',
+      capital_inicial: '',
+      capital_pendiente: '',
+      tipo_interes: '',
+      cuota_mensual: '',
+      fecha_inicio: '',
+      fecha_fin: '',
+      comision_apertura: '',
+    }
+  )
 
   const cambiarCampo = (campo, valor) => setForm({ ...form, [campo]: valor })
 
@@ -58,7 +62,7 @@ export default function ModalFinanciacion({ cuentas, guardar, cerrar }) {
   }
 
   return (
-    <Modal titulo="Nueva financiación" cerrar={cerrar}>
+    <Modal titulo={editando ? 'Editar financiación' : 'Nueva financiación'} cerrar={cerrar}>
       <div className="space-y-4">
         <div>
           <label className={ESTILO_LABEL}>Tipo de financiación *</label>
@@ -234,7 +238,7 @@ export default function ModalFinanciacion({ cuentas, guardar, cerrar }) {
             onClick={alGuardar}
             className="bg-[#4f8ef7] hover:bg-[#4f8ef7]/90 text-white text-xs font-medium rounded-lg px-4 py-2"
           >
-            Guardar
+            {editando ? 'Guardar cambios' : 'Guardar'}
           </button>
         </div>
       </div>

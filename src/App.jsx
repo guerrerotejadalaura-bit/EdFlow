@@ -130,6 +130,16 @@ export default function App() {
 
   // ── Modal de movimiento ─────────────────────────────────────
   const [modalMovimientoAbierto, setModalMovimientoAbierto] = useState(false)
+  const [movimientoEnEdicion, setMovimientoEnEdicion] = useState(null)
+
+  const abrirNuevoMovimiento = () => {
+    setMovimientoEnEdicion(null)
+    setModalMovimientoAbierto(true)
+  }
+  const abrirEdicionMovimiento = (mov) => {
+    setMovimientoEnEdicion(mov)
+    setModalMovimientoAbierto(true)
+  }
 
   // Si el movimiento es recurrente, generamos UN movimiento por cada
   // repetición, separados por la frecuencia elegida (ej. 3 movimientos
@@ -150,9 +160,28 @@ export default function App() {
     setEstado((prev) => ({ ...prev, movimientos: [...prev.movimientos, ...nuevosMovimientos] }))
   }
 
+  const editarMovimiento = (id, cambios) => {
+    setEstado((prev) => ({
+      ...prev,
+      movimientos: prev.movimientos.map((m) => (m.id === id ? { ...m, ...cambios } : m)),
+    }))
+  }
+
   const alGuardarMovimiento = (datos) => {
-    agregarMovimiento(datos)
+    if (movimientoEnEdicion) {
+      editarMovimiento(movimientoEnEdicion.id, datos)
+    } else {
+      agregarMovimiento(datos)
+    }
     setModalMovimientoAbierto(false)
+  }
+
+  const eliminarMovimiento = (id) => {
+    const movimientoBorrado = estado.movimientos.find((m) => m.id === id)
+    setEstado((prev) => ({ ...prev, movimientos: prev.movimientos.filter((m) => m.id !== id) }))
+    mostrarAvisoDeshacer('movimiento', `Movimiento "${movimientoBorrado.concepto}" eliminado`, () => {
+      setEstado((prev) => ({ ...prev, movimientos: [...prev.movimientos, movimientoBorrado] }))
+    })
   }
 
   // ── Modal de traspaso ────────────────────────────────────────
@@ -185,15 +214,44 @@ export default function App() {
 
   // ── Modal de financiación ────────────────────────────────────
   const [modalFinanciacionAbierto, setModalFinanciacionAbierto] = useState(false)
+  const [financiacionEnEdicion, setFinanciacionEnEdicion] = useState(null)
+
+  const abrirNuevaFinanciacion = () => {
+    setFinanciacionEnEdicion(null)
+    setModalFinanciacionAbierto(true)
+  }
+  const abrirEdicionFinanciacion = (fin) => {
+    setFinanciacionEnEdicion(fin)
+    setModalFinanciacionAbierto(true)
+  }
 
   const agregarFinanciacion = (datos) => {
     const financiacionNueva = { ...datos, id: generarId() }
     setEstado((prev) => ({ ...prev, financiaciones: [...prev.financiaciones, financiacionNueva] }))
   }
 
+  const editarFinanciacion = (id, cambios) => {
+    setEstado((prev) => ({
+      ...prev,
+      financiaciones: prev.financiaciones.map((f) => (f.id === id ? { ...f, ...cambios } : f)),
+    }))
+  }
+
   const alGuardarFinanciacion = (datos) => {
-    agregarFinanciacion(datos)
+    if (financiacionEnEdicion) {
+      editarFinanciacion(financiacionEnEdicion.id, datos)
+    } else {
+      agregarFinanciacion(datos)
+    }
     setModalFinanciacionAbierto(false)
+  }
+
+  const eliminarFinanciacion = (id) => {
+    const financiacionBorrada = estado.financiaciones.find((f) => f.id === id)
+    setEstado((prev) => ({ ...prev, financiaciones: prev.financiaciones.filter((f) => f.id !== id) }))
+    mostrarAvisoDeshacer('financiacion', `Financiación "${financiacionBorrada.nombre}" eliminada`, () => {
+      setEstado((prev) => ({ ...prev, financiaciones: [...prev.financiaciones, financiacionBorrada] }))
+    })
   }
 
   const fechaObjetivo = sumarMeses(fechaDeHoy(), 1)
@@ -208,11 +266,33 @@ export default function App() {
       case 'prevision':
         return <Prevision cuentas={estado.cuentas} irAConfiguracion={irAConfiguracion} />
       case 'pool':
-        return <PoolBancario cuentas={estado.cuentas} />
+        return (
+          <PoolBancario
+            cuentas={estado.cuentas}
+            financiaciones={estado.financiaciones}
+            abrirNuevaFinanciacion={abrirNuevaFinanciacion}
+            abrirEdicionFinanciacion={abrirEdicionFinanciacion}
+            eliminarFinanciacion={eliminarFinanciacion}
+            aviso={aviso}
+            alDeshacer={alDeshacer}
+          />
+        )
       case 'confirming':
         return <Confirming confirming={estado.confirming} />
       case 'movimientos':
-        return <Movimientos movimientos={estado.movimientos} />
+        return (
+          <Movimientos
+            movimientos={estado.movimientos}
+            cuentas={estado.cuentas}
+            categorias={estado.categorias}
+            abrirNuevoMovimiento={abrirNuevoMovimiento}
+            abrirEdicionMovimiento={abrirEdicionMovimiento}
+            eliminarMovimiento={eliminarMovimiento}
+            abrirNuevoTraspaso={() => setModalTraspasoAbierto(true)}
+            aviso={aviso}
+            alDeshacer={alDeshacer}
+          />
+        )
       case 'alertas':
         return <Alertas alertas={alertas} />
       case 'configuracion':
@@ -256,9 +336,9 @@ export default function App() {
         cambiarPestana={setPestanaActiva}
         cantidadAlertas={alertas.length}
         abrirNuevaCuenta={abrirNuevaCuenta}
-        abrirNuevoMovimiento={() => setModalMovimientoAbierto(true)}
+        abrirNuevoMovimiento={abrirNuevoMovimiento}
         abrirNuevoTraspaso={() => setModalTraspasoAbierto(true)}
-        abrirNuevaFinanciacion={() => setModalFinanciacionAbierto(true)}
+        abrirNuevaFinanciacion={abrirNuevaFinanciacion}
       />
       <main className="flex-1 p-6">
         <h1 className="text-xl font-semibold text-white mb-4">{titulos[pestanaActiva]}</h1>
@@ -276,6 +356,7 @@ export default function App() {
         <ModalMovimiento
           categorias={estado.categorias}
           cuentas={estado.cuentas}
+          movimientoExistente={movimientoEnEdicion}
           guardar={alGuardarMovimiento}
           cerrar={() => setModalMovimientoAbierto(false)}
         />
@@ -290,6 +371,7 @@ export default function App() {
       {modalFinanciacionAbierto && (
         <ModalFinanciacion
           cuentas={estado.cuentas}
+          financiacionExistente={financiacionEnEdicion}
           guardar={alGuardarFinanciacion}
           cerrar={() => setModalFinanciacionAbierto(false)}
         />
