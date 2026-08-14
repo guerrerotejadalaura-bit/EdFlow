@@ -2,8 +2,9 @@
 // BARRA LATERAL
 // ═══════════════════════════════════════════════════════════
 // El menú de navegación entre las 8 pestañas de EdFlow, más los
-// 4 botones de acceso rápido de abajo (Movimiento, Traspaso,
-// Financiación, Cuenta).
+// 4 botones de acceso rápido de abajo. Los 4 abren su formulario
+// correspondiente desde CUALQUIER pestaña (por eso las funciones
+// para abrirlos vienen de App.jsx, que es quien controla los modales).
 
 import {
   LayoutDashboard,
@@ -32,11 +33,13 @@ export default function BarraLateral({
   cambiarPestana,
   cantidadAlertas,
   abrirNuevaCuenta,
+  abrirNuevoMovimiento,
+  abrirNuevoTraspaso,
+  abrirNuevaFinanciacion,
 }) {
   return (
     <nav className="w-56 shrink-0 bg-[#0d0f14] border-r border-[#2d3553] p-3 flex flex-col justify-between">
 
-      {/* ── Lista de pestañas ── */}
       <div className="space-y-1">
         {PESTANAS.map(({ id, etiqueta, Icono }) => {
           const activa = pestanaActiva === id
@@ -62,26 +65,22 @@ export default function BarraLateral({
         })}
       </div>
 
-      {/* ── Botones de acceso rápido ── */}
-      {/* "+ Cuenta" ya abre el formulario real. Los otros 3 todavía
-          no tienen su formulario (los vamos a construir en los
-          próximos pasos), así que por ahora solo te llevan a la
-          pestaña relacionada. */}
+      {/* ── Botones de acceso rápido: ahora los 4 abren su formulario real ── */}
       <div className="space-y-2 pt-3 border-t border-[#2d3553]">
         <button
-          onClick={() => cambiarPestana('movimientos')}
+          onClick={abrirNuevoMovimiento}
           className="w-full bg-[#34d399] hover:bg-[#34d399]/90 text-[#0d0f14] text-sm font-medium rounded-lg py-2"
         >
           + Movimiento
         </button>
         <button
-          onClick={() => cambiarPestana('pool')}
+          onClick={abrirNuevoTraspaso}
           className="w-full border border-[#2d3553] text-[#cbd5e1] hover:bg-[#171b2a] text-sm rounded-lg py-2"
         >
           ⇄ Traspaso
         </button>
         <button
-          onClick={() => cambiarPestana('pool')}
+          onClick={abrirNuevaFinanciacion}
           className="w-full border border-[#2d3553] text-[#cbd5e1] hover:bg-[#171b2a] text-sm rounded-lg py-2"
         >
           + Financiación

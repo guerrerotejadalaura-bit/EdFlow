@@ -6,7 +6,9 @@ import { fechaDeHoy, sumarMeses, generarId } from './utilidades/fechas'
 
 import BarraLateral from './componentes/BarraLateral'
 import ModalCuenta from './componentes/ModalCuenta'
-import AvisoDeshacer from './componentes/AvisoDeshacer'
+import ModalMovimiento from './componentes/ModalMovimiento'
+import ModalTraspaso from './componentes/ModalTraspaso'
+import ModalFinanciacion from './componentes/ModalFinanciacion'
 import Dashboard from './pestanas/Dashboard'
 import ResumenMensual from './pestanas/ResumenMensual'
 import Prevision from './pestanas/Prevision'
@@ -16,8 +18,11 @@ import Movimientos from './pestanas/Movimientos'
 import Alertas from './pestanas/Alertas'
 import Configuracion from './pestanas/Configuracion'
 
-// Cuántos milisegundos queda visible el aviso de "Deshacer" (6 segundos).
 const DURACION_AVISO_MS = 6000
+
+// Cuántos meses hay que sumar según la frecuencia elegida, para
+// generar movimientos recurrentes o traspasos periódicos.
+const MESES_POR_FRECUENCIA = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 }
 
 export default function App() {
   const [estado, setEstado] = useState(leerDatos)
@@ -30,16 +35,12 @@ export default function App() {
   const irAConfiguracion = () => setPestanaActiva('configuracion')
 
   // ── Aviso de "Deshacer" ─────────────────────────────────────
-  // "aviso" guarda el mensaje a mostrar y la función que hay que
-  // ejecutar si el usuario toca "Deshacer". "timeoutRef" guarda el
-  // temporizador que hace desaparecer el aviso solo, para poder
-  // cancelarlo si aparece un aviso nuevo antes de que termine.
   const [aviso, setAviso] = useState(null)
   const timeoutRef = useRef(null)
 
-  const mostrarAvisoDeshacer = (mensaje, restaurar) => {
+  const mostrarAvisoDeshacer = (tipo, mensaje, restaurar) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    setAviso({ mensaje, restaurar })
+    setAviso({ tipo, mensaje, restaurar })
     timeoutRef.current = setTimeout(() => setAviso(null), DURACION_AVISO_MS)
   }
 
@@ -66,7 +67,6 @@ export default function App() {
     setCuentaEnEdicion(cuenta)
     setModalCuentaAbierto(true)
   }
-  const cerrarModalCuenta = () => setModalCuentaAbierto(false)
 
   const agregarCuenta = (datosCuenta) => {
     const cuentaNueva = { ...datosCuenta, id: generarId(), activa: true }
@@ -86,15 +86,13 @@ export default function App() {
     } else {
       agregarCuenta(datosCuenta)
     }
-    cerrarModalCuenta()
+    setModalCuentaAbierto(false)
   }
 
-  // Borrar una cuenta: guardamos una copia ANTES de borrarla, para
-  // poder devolverla si el usuario toca "Deshacer".
   const eliminarCuenta = (id) => {
     const cuentaBorrada = estado.cuentas.find((c) => c.id === id)
     setEstado((prev) => ({ ...prev, cuentas: prev.cuentas.filter((c) => c.id !== id) }))
-    mostrarAvisoDeshacer(`Cuenta "${cuentaBorrada.nombre}" eliminada`, () => {
+    mostrarAvisoDeshacer('cuenta', `Cuenta "${cuentaBorrada.nombre}" eliminada`, () => {
       setEstado((prev) => ({ ...prev, cuentas: [...prev.cuentas, cuentaBorrada] }))
     })
   }
@@ -115,21 +113,87 @@ export default function App() {
   const eliminarCategoria = (id) => {
     const categoriaBorrada = estado.categorias.find((c) => c.id === id)
     setEstado((prev) => ({ ...prev, categorias: prev.categorias.filter((c) => c.id !== id) }))
-    mostrarAvisoDeshacer(`Categoría "${categoriaBorrada.label}" eliminada`, () => {
+    mostrarAvisoDeshacer('categoria', `Categoría "${categoriaBorrada.label}" eliminada`, () => {
       setEstado((prev) => ({ ...prev, categorias: [...prev.categorias, categoriaBorrada] }))
     })
   }
 
   // ── Borrar todo ───────────────────────────────────────────────
-  // Guardamos TODO el estado anterior antes de vaciarlo, para poder
-  // restaurarlo entero si el usuario se arrepiente.
   const borrarTodo = () => {
     const estadoAnterior = estado
     borrarDatos()
     setEstado(ESTADO_INICIAL)
-    mostrarAvisoDeshacer('Todos los datos fueron borrados', () => {
+    mostrarAvisoDeshacer('todo', 'Todos los datos fueron borrados', () => {
       setEstado(estadoAnterior)
     })
+  }
+
+  // ── Modal de movimiento ─────────────────────────────────────
+  const [modalMovimientoAbierto, setModalMovimientoAbierto] = useState(false)
+
+  // Si el movimiento es recurrente, generamos UN movimiento por cada
+  // repetición, separados por la frecuencia elegida (ej. 3 movimientos
+  // mensuales seguidos).
+  const agregarMovimiento = (datos) => {
+    const { recurrente, frecuencia, repeticiones, ...base } = datos
+    const cantidadVeces = recurrente ? Number(repeticiones) : 1
+    const mesesEntreCadaUno = MESES_POR_FRECUENCIA[frecuencia] || 1
+
+    const nuevosMovimientos = []
+    for (let i = 0; i < cantidadVeces; i++) {
+      nuevosMovimientos.push({
+        ...base,
+        id: generarId(),
+        fecha: sumarMeses(base.fecha, mesesEntreCadaUno * i),
+      })
+    }
+    setEstado((prev) => ({ ...prev, movimientos: [...prev.movimientos, ...nuevosMovimientos] }))
+  }
+
+  const alGuardarMovimiento = (datos) => {
+    agregarMovimiento(datos)
+    setModalMovimientoAbierto(false)
+  }
+
+  // ── Modal de traspaso ────────────────────────────────────────
+  const [modalTraspasoAbierto, setModalTraspasoAbierto] = useState(false)
+
+  // Un traspaso genera DOS movimientos vinculados por cada repetición:
+  // una salida (negativa) en la cuenta origen, y una entrada (positiva)
+  // en la cuenta destino. Los dos usan la categoría "traspasos", que
+  // es "neutra" (no cuenta como ingreso ni gasto real).
+  const agregarTraspaso = (datos) => {
+    const { origen_id, destino_id, importe, fecha, concepto, notas, periodico, frecuencia, repeticiones } = datos
+    const cantidadVeces = periodico ? Number(repeticiones) : 1
+    const mesesEntreCadaUno = MESES_POR_FRECUENCIA[frecuencia] || 1
+
+    const nuevosMovimientos = []
+    for (let i = 0; i < cantidadVeces; i++) {
+      const fechaMovimiento = sumarMeses(fecha, mesesEntreCadaUno * i)
+      nuevosMovimientos.push(
+        { id: generarId(), fecha: fechaMovimiento, importe: -Math.abs(importe), concepto, categoria: 'traspasos', cuenta_id: origen_id, notas },
+        { id: generarId(), fecha: fechaMovimiento, importe: Math.abs(importe), concepto, categoria: 'traspasos', cuenta_id: destino_id, notas }
+      )
+    }
+    setEstado((prev) => ({ ...prev, movimientos: [...prev.movimientos, ...nuevosMovimientos] }))
+  }
+
+  const alGuardarTraspaso = (datos) => {
+    agregarTraspaso(datos)
+    setModalTraspasoAbierto(false)
+  }
+
+  // ── Modal de financiación ────────────────────────────────────
+  const [modalFinanciacionAbierto, setModalFinanciacionAbierto] = useState(false)
+
+  const agregarFinanciacion = (datos) => {
+    const financiacionNueva = { ...datos, id: generarId() }
+    setEstado((prev) => ({ ...prev, financiaciones: [...prev.financiaciones, financiacionNueva] }))
+  }
+
+  const alGuardarFinanciacion = (datos) => {
+    agregarFinanciacion(datos)
+    setModalFinanciacionAbierto(false)
   }
 
   const fechaObjetivo = sumarMeses(fechaDeHoy(), 1)
@@ -165,6 +229,8 @@ export default function App() {
             agregarCategoria={agregarCategoria}
             eliminarCategoria={eliminarCategoria}
             borrarTodo={borrarTodo}
+            aviso={aviso}
+            alDeshacer={alDeshacer}
           />
         )
       default:
@@ -190,6 +256,9 @@ export default function App() {
         cambiarPestana={setPestanaActiva}
         cantidadAlertas={alertas.length}
         abrirNuevaCuenta={abrirNuevaCuenta}
+        abrirNuevoMovimiento={() => setModalMovimientoAbierto(true)}
+        abrirNuevoTraspaso={() => setModalTraspasoAbierto(true)}
+        abrirNuevaFinanciacion={() => setModalFinanciacionAbierto(true)}
       />
       <main className="flex-1 p-6">
         <h1 className="text-xl font-semibold text-white mb-4">{titulos[pestanaActiva]}</h1>
@@ -200,11 +269,31 @@ export default function App() {
         <ModalCuenta
           cuentaExistente={cuentaEnEdicion}
           guardar={alGuardarCuenta}
-          cerrar={cerrarModalCuenta}
+          cerrar={() => setModalCuentaAbierto(false)}
         />
       )}
-
-      {aviso && <AvisoDeshacer mensaje={aviso.mensaje} onDeshacer={alDeshacer} />}
+      {modalMovimientoAbierto && (
+        <ModalMovimiento
+          categorias={estado.categorias}
+          cuentas={estado.cuentas}
+          guardar={alGuardarMovimiento}
+          cerrar={() => setModalMovimientoAbierto(false)}
+        />
+      )}
+      {modalTraspasoAbierto && (
+        <ModalTraspaso
+          cuentas={estado.cuentas}
+          guardar={alGuardarTraspaso}
+          cerrar={() => setModalTraspasoAbierto(false)}
+        />
+      )}
+      {modalFinanciacionAbierto && (
+        <ModalFinanciacion
+          cuentas={estado.cuentas}
+          guardar={alGuardarFinanciacion}
+          cerrar={() => setModalFinanciacionAbierto(false)}
+        />
+      )}
     </div>
   )
 }

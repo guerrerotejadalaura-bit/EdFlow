@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Landmark, ArrowUp, ArrowDown, ArrowLeftRight } from 'lucide-react'
+import { Landmark, ArrowUp, ArrowDown, ArrowLeftRight, Undo2 } from 'lucide-react'
 import EstadoVacio from '../componentes/EstadoVacio'
 import ModalCategoria from '../componentes/ModalCategoria'
 import ConfirmacionInline from '../componentes/ConfirmacionInline'
@@ -16,11 +16,21 @@ function IconoSigno({ signo }) {
   return <ArrowLeftRight size={11} className="text-[#94a3b8]" />
 }
 
-// Nota: el modal de "nueva/editar cuenta" ahora se controla desde
-// App.jsx (porque el botón "+ Cuenta" de la barra lateral necesita
-// abrirlo también, y esa barra vive fuera de esta pestaña). Por eso
-// acá recibimos "abrirNuevaCuenta" y "abrirEdicionCuenta" como props
-// en vez de manejar ese modal acá adentro.
+// Botoncito reutilizable de "Deshacer", para poner al lado de cada
+// sección (cuentas, categorías) cuando corresponde.
+function BotonDeshacer({ mensaje, onDeshacer }) {
+  return (
+    <button
+      onClick={onDeshacer}
+      className="flex items-center gap-1.5 text-xs text-[#4f8ef7] font-medium
+                 bg-[#4f8ef7]/10 border border-[#4f8ef7]/30 rounded-lg px-3 py-2 hover:bg-[#4f8ef7]/20"
+    >
+      <Undo2 size={13} />
+      {mensaje}
+    </button>
+  )
+}
+
 export default function Configuracion({
   config,
   guardarConfigEmpresa,
@@ -33,14 +43,16 @@ export default function Configuracion({
   agregarCategoria,
   eliminarCategoria,
   borrarTodo,
+  // "aviso" viene de App.jsx: guarda qué se borró por última vez y
+  // cómo deshacerlo. "tipo" nos dice en qué sección mostrar el botón.
+  aviso,
+  alDeshacer,
 }) {
   const [borrador, setBorrador] = useState(config)
   const cambiarBorrador = (campo, valor) => setBorrador({ ...borrador, [campo]: valor })
 
   const [modalCategoriaAbierto, setModalCategoriaAbierto] = useState(false)
 
-  // ── Confirmaciones "Sí/No": guardamos ACÁ cuál elemento está
-  // pidiendo confirmación ahora mismo (o null si ninguno). ──
   const [confirmarEliminarCuentaId, setConfirmarEliminarCuentaId] = useState(null)
   const [confirmarEliminarCategoriaId, setConfirmarEliminarCategoriaId] = useState(null)
   const [confirmarBorrarTodo, setConfirmarBorrarTodo] = useState(false)
@@ -102,12 +114,18 @@ export default function Configuracion({
       <div className="bg-[#171b2a] border border-[#2d3553] rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-semibold text-[#94a3b8] tracking-wide">CUENTAS BANCARIAS</h3>
-          <button
-            onClick={abrirNuevaCuenta}
-            className="bg-[#4f8ef7] hover:bg-[#4f8ef7]/90 text-white text-xs font-medium rounded-lg px-4 py-2"
-          >
-            + Añadir cuenta
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Si lo último que se borró fue una CUENTA, mostramos acá el "Deshacer" */}
+            {aviso?.tipo === 'cuenta' && (
+              <BotonDeshacer mensaje={aviso.mensaje} onDeshacer={alDeshacer} />
+            )}
+            <button
+              onClick={abrirNuevaCuenta}
+              className="bg-[#4f8ef7] hover:bg-[#4f8ef7]/90 text-white text-xs font-medium rounded-lg px-4 py-2"
+            >
+              + Añadir cuenta
+            </button>
+          </div>
         </div>
 
         {cuentas.length === 0 ? (
@@ -149,10 +167,6 @@ export default function Configuracion({
                   >
                     Editar
                   </button>
-
-                  {/* Acá está el cambio: si esta cuenta es la que está
-                      "pidiendo confirmación", mostramos Sí/No en vez
-                      de la ✕. */}
                   {confirmarEliminarCuentaId === cuenta.id ? (
                     <ConfirmacionInline
                       onConfirmar={() => {
@@ -180,12 +194,18 @@ export default function Configuracion({
       <div className="bg-[#171b2a] border border-[#2d3553] rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-semibold text-[#94a3b8] tracking-wide">CATEGORÍAS DE MOVIMIENTOS</h3>
-          <button
-            onClick={() => setModalCategoriaAbierto(true)}
-            className="bg-[#4f8ef7] hover:bg-[#4f8ef7]/90 text-white text-xs font-medium rounded-lg px-4 py-2"
-          >
-            + Nueva categoría
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Si lo último que se borró fue una CATEGORÍA, mostramos acá el "Deshacer" */}
+            {aviso?.tipo === 'categoria' && (
+              <BotonDeshacer mensaje={aviso.mensaje} onDeshacer={alDeshacer} />
+            )}
+            <button
+              onClick={() => setModalCategoriaAbierto(true)}
+              className="bg-[#4f8ef7] hover:bg-[#4f8ef7]/90 text-white text-xs font-medium rounded-lg px-4 py-2"
+            >
+              + Nueva categoría
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           {categorias.map((cat) => (
@@ -198,7 +218,6 @@ export default function Configuracion({
               <span className="w-4 h-4 rounded-full bg-[#171b2a] flex items-center justify-center">
                 <IconoSigno signo={cat.signo} />
               </span>
-
               {confirmarEliminarCategoriaId === cat.id ? (
                 <ConfirmacionInline
                   onConfirmar={() => {
@@ -229,25 +248,30 @@ export default function Configuracion({
           </p>
         </div>
 
-        {confirmarBorrarTodo ? (
-          <div className="flex items-center gap-3 shrink-0">
-            <span className="text-xs text-[#94a3b8]">¿Seguro? No se puede deshacer.</span>
-            <ConfirmacionInline
-              onConfirmar={() => {
-                borrarTodo()
-                setConfirmarBorrarTodo(false)
-              }}
-              onCancelar={() => setConfirmarBorrarTodo(false)}
-            />
-          </div>
-        ) : (
-          <button
-            onClick={() => setConfirmarBorrarTodo(true)}
-            className="text-xs text-[#f87171] border border-[#f87171]/40 hover:bg-[#f87171]/10 rounded-lg px-4 py-2 shrink-0"
-          >
-            Borrar todos los datos
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Si lo último que se borró fue TODO, mostramos acá el "Deshacer" */}
+          {aviso?.tipo === 'todo' && <BotonDeshacer mensaje={aviso.mensaje} onDeshacer={alDeshacer} />}
+
+          {confirmarBorrarTodo ? (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-[#94a3b8]">¿Eliminar todos los datos?</span>
+              <ConfirmacionInline
+                onConfirmar={() => {
+                  borrarTodo()
+                  setConfirmarBorrarTodo(false)
+                }}
+                onCancelar={() => setConfirmarBorrarTodo(false)}
+              />
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmarBorrarTodo(true)}
+              className="text-xs text-[#f87171] border border-[#f87171]/40 hover:bg-[#f87171]/10 rounded-lg px-4 py-2"
+            >
+              Borrar todos los datos
+            </button>
+          )}
+        </div>
       </div>
 
       {modalCategoriaAbierto && (
