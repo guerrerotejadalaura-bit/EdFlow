@@ -9,6 +9,8 @@ import ModalCuenta from './componentes/ModalCuenta'
 import ModalMovimiento from './componentes/ModalMovimiento'
 import ModalTraspaso from './componentes/ModalTraspaso'
 import ModalFinanciacion from './componentes/ModalFinanciacion'
+import ModalConfirmingLinea from './componentes/ModalConfirmingLinea'
+import ModalAjusteSaldos from './componentes/ModalAjusteSaldos'
 import Dashboard from './pestanas/Dashboard'
 import ResumenMensual from './pestanas/ResumenMensual'
 import Prevision from './pestanas/Prevision'
@@ -184,6 +186,37 @@ export default function App() {
     })
   }
 
+  // Borrado en lote: guardamos TODOS los movimientos seleccionados
+  // antes de borrarlos, para poder devolverlos juntos si se deshace.
+  const eliminarVariosMovimientos = (ids) => {
+    const idsSet = new Set(ids)
+    const movimientosBorrados = estado.movimientos.filter((m) => idsSet.has(m.id))
+    setEstado((prev) => ({ ...prev, movimientos: prev.movimientos.filter((m) => !idsSet.has(m.id)) }))
+    mostrarAvisoDeshacer('movimiento', `${movimientosBorrados.length} movimientos eliminados`, () => {
+      setEstado((prev) => ({ ...prev, movimientos: [...prev.movimientos, ...movimientosBorrados] }))
+    })
+  }
+
+  // ── Ajuste de saldos ─────────────────────────────────────────
+  const [modalAjusteAbierto, setModalAjusteAbierto] = useState(false)
+
+  // Recibe una lista de { cuenta_id, diferencia, fecha } y crea UN
+  // movimiento de categoría "ajuste_saldo" por cada una, para que el
+  // saldo proyectado vuelva a coincidir con el saldo real del banco.
+  const aplicarAjustesDeSaldo = (ajustes) => {
+    const movimientosDeAjuste = ajustes.map(({ cuenta_id, diferencia, fecha }) => ({
+      id: generarId(),
+      fecha,
+      importe: diferencia,
+      concepto: 'Ajuste de saldo',
+      categoria: 'ajuste_saldo',
+      cuenta_id,
+      notas: '',
+    }))
+    setEstado((prev) => ({ ...prev, movimientos: [...prev.movimientos, ...movimientosDeAjuste] }))
+    setModalAjusteAbierto(false)
+  }
+
   // ── Modal de traspaso ────────────────────────────────────────
   const [modalTraspasoAbierto, setModalTraspasoAbierto] = useState(false)
 
@@ -254,6 +287,48 @@ export default function App() {
     })
   }
 
+  // ── Confirming ────────────────────────────────────────────────
+  const [modalConfirmingAbierto, setModalConfirmingAbierto] = useState(false)
+  const [lineaConfirmingEnEdicion, setLineaConfirmingEnEdicion] = useState(null)
+
+  const abrirNuevaLineaConfirming = () => {
+    setLineaConfirmingEnEdicion(null)
+    setModalConfirmingAbierto(true)
+  }
+  const abrirEdicionLineaConfirming = (linea) => {
+    setLineaConfirmingEnEdicion(linea)
+    setModalConfirmingAbierto(true)
+  }
+
+  const agregarLineaConfirming = (datos) => {
+    const lineaNueva = { ...datos, id: generarId() }
+    setEstado((prev) => ({ ...prev, confirming: [...prev.confirming, lineaNueva] }))
+  }
+
+  const editarLineaConfirming = (id, cambios) => {
+    setEstado((prev) => ({
+      ...prev,
+      confirming: prev.confirming.map((l) => (l.id === id ? { ...l, ...cambios } : l)),
+    }))
+  }
+
+  const alGuardarLineaConfirming = (datos) => {
+    if (lineaConfirmingEnEdicion) {
+      editarLineaConfirming(lineaConfirmingEnEdicion.id, datos)
+    } else {
+      agregarLineaConfirming(datos)
+    }
+    setModalConfirmingAbierto(false)
+  }
+
+  const eliminarLineaConfirming = (id) => {
+    const lineaBorrada = estado.confirming.find((l) => l.id === id)
+    setEstado((prev) => ({ ...prev, confirming: prev.confirming.filter((l) => l.id !== id) }))
+    mostrarAvisoDeshacer('confirming', `Línea "${lineaBorrada.nombre}" eliminada`, () => {
+      setEstado((prev) => ({ ...prev, confirming: [...prev.confirming, lineaBorrada] }))
+    })
+  }
+
   const fechaObjetivo = sumarMeses(fechaDeHoy(), 1)
   const alertas = calcularAlertas(estado.cuentas, estado.financiaciones, estado.movimientos, fechaObjetivo)
 
@@ -278,7 +353,17 @@ export default function App() {
           />
         )
       case 'confirming':
-        return <Confirming confirming={estado.confirming} />
+        return (
+          <Confirming
+            confirming={estado.confirming}
+            cuentas={estado.cuentas}
+            abrirNuevaLineaConfirming={abrirNuevaLineaConfirming}
+            abrirEdicionLineaConfirming={abrirEdicionLineaConfirming}
+            eliminarLineaConfirming={eliminarLineaConfirming}
+            aviso={aviso}
+            alDeshacer={alDeshacer}
+          />
+        )
       case 'movimientos':
         return (
           <Movimientos
@@ -288,7 +373,9 @@ export default function App() {
             abrirNuevoMovimiento={abrirNuevoMovimiento}
             abrirEdicionMovimiento={abrirEdicionMovimiento}
             eliminarMovimiento={eliminarMovimiento}
+            eliminarVariosMovimientos={eliminarVariosMovimientos}
             abrirNuevoTraspaso={() => setModalTraspasoAbierto(true)}
+            abrirAjusteSaldos={() => setModalAjusteAbierto(true)}
             aviso={aviso}
             alDeshacer={alDeshacer}
           />
@@ -374,6 +461,22 @@ export default function App() {
           financiacionExistente={financiacionEnEdicion}
           guardar={alGuardarFinanciacion}
           cerrar={() => setModalFinanciacionAbierto(false)}
+        />
+      )}
+      {modalConfirmingAbierto && (
+        <ModalConfirmingLinea
+          cuentas={estado.cuentas}
+          lineaExistente={lineaConfirmingEnEdicion}
+          guardar={alGuardarLineaConfirming}
+          cerrar={() => setModalConfirmingAbierto(false)}
+        />
+      )}
+      {modalAjusteAbierto && (
+        <ModalAjusteSaldos
+          cuentas={estado.cuentas}
+          movimientos={estado.movimientos}
+          aplicarAjustes={aplicarAjustesDeSaldo}
+          cerrar={() => setModalAjusteAbierto(false)}
         />
       )}
     </div>
